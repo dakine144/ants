@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ant Foraging Simulation</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh; /* Use min-height to allow content to expand */
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+            gap: 20px;
+        }
+        canvas {
+            border: 1px solid #333;
+            background-color: #fff;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding: 10px; /* Add some padding for better spacing */
+            max-height: 40vh; /* Limit the height of the controls container */
+            overflow-y: auto; /* Enable vertical scrolling if controls exceed max height */
+        }
+        .slider-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap; /* Allow sliders to wrap to the next line on smaller screens */
+            justify-content: center;
+        }
+        .slider-container {
+            margin: 5px 0;
+            width: 300px;
+        }
+        .button-container {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #e9e9e9;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #dcdcdc;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <div class="slider-row">
+            <div class="slider-container">
+                <label for="numAnts">Number of Ants: <span id="antCount">50</span></label>
+                <input type="range" id="numAntsSlider" min="10" max="200" value="50">
+            </div>
+            <div class="slider-container">
+                <label for="antSpeed">Ant Speed: <span id="speedValue">2.0</span></label>
+                <input type="range" id="speedSlider" min="0.5" max="5" step="0.5" value="2">
+            </div>
+        </div>
+        <div class="slider-row">
+            <div class="slider-container">
+                <label for="nestFollow">Nest Follow Strength: <span id="nestFollowValue">0.1</span></label>
+                <input type="range" id="nestFollowSlider" min="0" max="1" step="0.05" value="0.1">
+            </div>
+            <div class="slider-container">
+                <label for="foodFollow">Food Follow Strength: <span id="foodFollowValue">0.1</span></label>
+                <input type="range" id="foodFollowSlider" min="0" max="1" step="0.05" value="0.1">
+            </div>
+        </div>
+        <div class="slider-row">
+            <div class="slider-container">
+                <label for="foodPheroEvaporation">Food Pheromone Evaporation: <span id="foodEvapValue">0.99</span></label>
+                <input type="range" id="foodEvapSlider" min="0.9" max="1" step="0.005" value="0.99">
+            </div>
+            <div class="slider-container">
+                <label for="nestPheromoneEvaporation">Nest Pheromone Evaporation: <span id="nestEvapValue">0.99</span></label>
+                <input type="range" id="nestEvapSlider" min="0.9" max="1" step="0.005" value="0.99">
+            </div>
+        </div>
+        <div class="slider-row">
+            <div class="slider-container">
+                <label for="foodDropoff">Pheromone Decay Rate (Food): <span id="foodDropoffValue">50</span></label>
+                <input type="range" id="foodDropoffSlider" min="1" max="150" step="1" value="50">
+            </div>
+            <div class="slider-container">
+                <label for="nestDropoff">Pheromone Decay Rate (Nest): <span id="nestDropoffValue">50</span></label>
+                <input type="range" id="nestDropoffSlider" min="1" max="150" step="1" value="50">
+            </div>
+        </div>
+        <!-- New slider for gathering time -->
+        <div class="slider-row">
+            <div class="slider-container">
+                <label for="foodGatherTime">Food Gathering Time: <span id="foodGatherTimeValue">200</span></label>
+                <input type="range" id="foodGatherTimeSlider" min="10" max="1000" step="10" value="200">
+            </div>
+        </div>
+        <div class="button-container">
+            <button id="addFoodBtn">Add Food</button>
+            <button id="removeFoodBtn">Remove Food</button>
+            <button id="togglePheromonesBtn">Hide Pheromones</button>
+        </div>
+    </div>
+
+    <canvas id="antCanvas" width="800" height="800"></canvas>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const canvas = document.getElementById('antCanvas');
+            const ctx = canvas.getContext('2d');
+
+            const numAntsSlider = document.getElementById('numAntsSlider');
+            const antCountSpan = document.getElementById('antCount');
+            const speedSlider = document.getElementById('speedSlider');
+            const speedValueSpan = document.getElementById('speedValue');
+            const nestFollowSlider = document.getElementById('nestFollowSlider');
+            const nestFollowValueSpan = document.getElementById('nestFollowValue');
+            const foodFollowSlider = document.getElementById('foodFollowSlider');
+            const foodFollowValueSpan = document.getElementById('foodFollowValue');
+            const foodEvapSlider = document.getElementById('foodEvapSlider');
+            const foodEvapValueSpan = document.getElementById('foodEvapValue');
+            const nestEvapSlider = document.getElementById('nestEvapSlider');
+            const nestEvapValueSpan = document.getElementById('nestEvapValue');
+            const foodDropoffSlider = document.getElementById('foodDropoffSlider');
+            const foodDropoffValueSpan = document.getElementById('foodDropoffValue');
+            const nestDropoffSlider = document.getElementById('nestDropoffSlider');
+            const nestDropoffValueSpan = document.getElementById('nestDropoffValue');
+            const addFoodBtn = document.getElementById('addFoodBtn');
+            const removeFoodBtn = document.getElementById('removeFoodBtn');
+            const togglePheromonesBtn = document.getElementById('togglePheromonesBtn');
+            const foodGatherTimeSlider = document.getElementById('foodGatherTimeSlider');
+            const foodGatherTimeValueSpan = document.getElementById('foodGatherTimeValue');
+
+
+            const gridSize = 50; 
+            const cellSize = canvas.width / gridSize;
+            let ants = [];
+            
+            // New variables for food block dimensions
+            const FOOD_WIDTH = 50;
+            const FOOD_HEIGHT = 50;
+            
+            // Updated food source location for the larger canvas
+            let foodSources = [{x: 600, y: 600, width: FOOD_WIDTH, height: FOOD_HEIGHT}];
+            
+            const pheromoneGrid = Array.from({ length: gridSize }, () => 
+              Array.from({ length: gridSize }, () => ({ food: 0, nest: 0 }))
+            );
+            
+            // Updated nest location to be the same size as the food blocks
+            const NEST_LOCATION = {x: 400, y: 400, width: FOOD_WIDTH, height: FOOD_HEIGHT};
+
+            // New state variable for the pheromone visibility
+            let showPheromones = true;
+            
+            // Ant icon image
+            const antImage = new Image();
+            let antImageLoaded = false;
+            antImage.onload = () => {
+                antImageLoaded = true;
+            };
+            // Corrected image source using a new publicly available URL
+            antImage.src = 'https://freesvg.org/img/rejon_Ant_Icon.png';
+
+            class Ant {
+              constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.hasFood = false;
+                this.distanceTraveled = 0; // New property to track distance for pheromone decay
+                this.gatheringTimer = 0;
+              }
+
+              update(speed) {
+                const prevX = this.x;
+                const prevY = this.y;
+
+                // Check if ant is in the process of gathering food
+                if (this.gatheringTimer > 0) {
+                    this.gatheringTimer--;
+                    return; // Don't move while gathering
+                }
+
+                // Corrected pheromone following logic
+                const targetPheromone = this.hasFood ? 'nest' : 'food';
+                const followStrength = this.hasFood ? parseFloat(nestFollowSlider.value) : parseFloat(foodFollowSlider.value);
+                const wanderStrength = 1 - followStrength;
+
+                const currentGridX = Math.floor(this.x / cellSize);
+                const currentGridY = Math.floor(this.y / cellSize);
+                
+                let maxPheromone = 0;
+                let targetDirectionX = this.vx;
+                let targetDirectionY = this.vy;
+
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const checkX = currentGridX + dx;
+                        const checkY = currentGridY + dy;
+
+                        if (checkX >= 0 && checkX < gridSize && checkY >= 0 && checkY < gridSize) {
+                            const pheromoneLevel = pheromoneGrid[checkX][checkY][targetPheromone];
+                            if (pheromoneLevel > maxPheromone) {
+                                maxPheromone = pheromoneLevel;
+                                targetDirectionX = dx;
+                                targetDirectionY = dy;
+                            }
+                        }
+                    }
+                }
+
+                if (maxPheromone > 0) {
+                    this.vx = this.vx * wanderStrength + targetDirectionX * followStrength;
+                    this.vy = this.vy * wanderStrength + targetDirectionY * followStrength;
+                } else {
+                    this.vx += (Math.random() - 0.5) * wanderStrength;
+                    this.vy += (Math.random() - 0.5) * wanderStrength;
+                }
+
+                const length = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (length > 0) {
+                    this.vx /= length;
+                    this.vy /= length;
+                }
+                
+                this.x += this.vx * speed;
+                this.y += this.vy * speed;
+
+                // Update distance traveled for exponential decay
+                const traveledThisFrame = Math.sqrt(Math.pow(this.x - prevX, 2) + Math.pow(this.y - prevY, 2));
+                this.distanceTraveled += traveledThisFrame;
+
+                if (this.x < 0) {
+                    this.x = 0;
+                    this.vx = -this.vx + (Math.random() - 0.5) * 0.5;
+                }
+                if (this.x > canvas.width) {
+                    this.x = canvas.width;
+                    this.vx = -this.vx + (Math.random() - 0.5) * 0.5;
+                }
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.vy = -this.vy + (Math.random() - 0.5) * 0.5;
+                }
+                if (this.y > canvas.height) {
+                    this.y = canvas.height;
+                    this.vy = -this.vy + (Math.random() - 0.5) * 0.5;
+                }
+                
+                const gridX = Math.floor(this.x / cellSize);
+                const gridY = Math.floor(this.y / cellSize);
+
+                // Check for food
+                const prevHasFood = this.hasFood;
+                if (!this.hasFood) {
+                    for (const food of foodSources) {
+                        if (this.x > food.x && this.x < (food.x + food.width) && 
+                            this.y > food.y && this.y < (food.y + food.height)) {
+                            this.hasFood = true;
+                            // Set the gathering timer when food is found
+                            this.gatheringTimer = parseFloat(foodGatherTimeSlider.value);
+                            break;
+                        }
+                    }
+                }
+
+                // Check for nest
+                if (this.x > NEST_LOCATION.x && this.x < (NEST_LOCATION.x + NEST_LOCATION.width) && 
+                    this.y > NEST_LOCATION.y && this.y < (NEST_LOCATION.y + NEST_LOCATION.height) && 
+                    this.hasFood) {
+                    this.hasFood = false;
+                }
+                
+                // If the state changed (found food or returned to nest), reset distance traveled
+                if (this.hasFood !== prevHasFood) {
+                    this.distanceTraveled = 0;
+                }
+
+                // Drop pheromone based on exponential decay
+                if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
+                    const decayRate = this.hasFood ? parseFloat(foodDropoffSlider.value) : parseFloat(nestDropoffSlider.value);
+                    const pheromoneAmount = Math.exp(-this.distanceTraveled / decayRate);
+                    
+                    if (this.hasFood) {
+                      // Ant is returning with food, drop food (blue) pheromone
+                      pheromoneGrid[gridX][gridY].food += pheromoneAmount;
+                    } else {
+                      // Ant is searching for food, drop nest (red) pheromone
+                      pheromoneGrid[gridX][gridY].nest += pheromoneAmount;
+                    }
+                }
+              }
+              
+              draw() {
+                const antSize = 30; 
+                
+                if (!antImageLoaded) {
+                    // Draw a placeholder if the image isn't loaded yet
+                    ctx.fillStyle = this.hasFood ? 'blue' : 'black';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, antSize / 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Save the current canvas state before applying transformations
+                    ctx.save();
+                    
+                    // Move the canvas origin to the ant's position
+                    ctx.translate(this.x, this.y);
+
+                    // Rotate the canvas to match the ant's direction
+                    const angle = Math.atan2(this.vy, this.vx) + Math.PI / 2; // Add a quarter turn to orient the image correctly
+                    ctx.rotate(angle);
+                    
+                    // Draw the image centered on the new origin
+                    ctx.drawImage(antImage, -antSize / 2, -antSize / 2, antSize, antSize);
+                    
+                    // Restore the canvas state
+                    ctx.restore();
+                }
+              }
+            }
+
+            function createAnts(count) {
+              ants = [];
+              for (let i = 0; i < count; i++) {
+                ants.push(new Ant(NEST_LOCATION.x, NEST_LOCATION.y)); 
+              }
+            }
+
+            numAntsSlider.addEventListener('input', (e) => {
+                const newAntCount = parseInt(e.target.value);
+                antCountSpan.textContent = newAntCount;
+                createAnts(newAntCount);
+            });
+
+            speedSlider.addEventListener('input', (e) => {
+                speedValueSpan.textContent = e.target.value;
+            });
+            
+            nestFollowSlider.addEventListener('input', (e) => {
+                nestFollowValueSpan.textContent = e.target.value;
+            });
+
+            foodFollowSlider.addEventListener('input', (e) => {
+                foodFollowValueSpan.textContent = e.target.value;
+            });
+
+            foodEvapSlider.addEventListener('input', (e) => {
+                foodEvapValueSpan.textContent = e.target.value;
+            });
+
+            nestEvapSlider.addEventListener('input', (e) => {
+                nestEvapValueSpan.textContent = e.target.value;
+            });
+            
+            foodDropoffSlider.addEventListener('input', (e) => {
+                foodDropoffValueSpan.textContent = e.target.value;
+            });
+            
+            nestDropoffSlider.addEventListener('input', (e) => {
+                nestDropoffValueSpan.textContent = e.target.value;
+            });
+
+            foodGatherTimeSlider.addEventListener('input', (e) => {
+                foodGatherTimeValueSpan.textContent = e.target.value;
+            });
+
+
+            // Replaced the add/remove buttons with click logic
+            // Add click event listener to the canvas
+            canvas.addEventListener('click', (event) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+
+                let foodRemoved = false;
+                // Check if a food source was clicked to remove it
+                for (let i = 0; i < foodSources.length; i++) {
+                    const food = foodSources[i];
+                    if (x > food.x && x < (food.x + food.width) && 
+                        y > food.y && y < (food.y + food.height)) {
+                        foodSources.splice(i, 1);
+                        foodRemoved = true;
+                        break;
+                    }
+                }
+                // If no food was removed, add a new one
+                if (!foodRemoved) {
+                    foodSources.push({
+                        x: x - FOOD_WIDTH / 2, // Center the new food block on the cursor
+                        y: y - FOOD_HEIGHT / 2,
+                        width: FOOD_WIDTH,
+                        height: FOOD_HEIGHT
+                    });
+                }
+            });
+
+            togglePheromonesBtn.addEventListener('click', () => {
+                showPheromones = !showPheromones;
+                togglePheromonesBtn.textContent = showPheromones ? 'Hide Pheromones' : 'Show Pheromones';
+            });
+
+
+            function gameLoop() {
+                const currentSpeed = parseFloat(speedSlider.value);
+                ants.forEach(ant => ant.update(currentSpeed));
+
+                const foodEvaporationRate = parseFloat(foodEvapSlider.value);
+                const nestEvaporationRate = parseFloat(nestEvapSlider.value);
+
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        // Apply multiplicative evaporation
+                        pheromoneGrid[i][j].food *= foodEvaporationRate;
+                        pheromoneGrid[i][j].nest *= nestEvaporationRate;
+
+                        // Add a small threshold to ensure it eventually hits zero
+                        if (pheromoneGrid[i][j].food < 0.001) {
+                            pheromoneGrid[i][j].food = 0;
+                        }
+                        if (pheromoneGrid[i][j].nest < 0.001) {
+                            pheromoneGrid[i][j].nest = 0;
+                        }
+                    }
+                }
+
+                drawScene();
+                requestAnimationFrame(gameLoop);
+            }
+
+            function drawScene() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (showPheromones) {
+                    for (let i = 0; i < gridSize; i++) {
+                        for (let j = 0; j < gridSize; j++) {
+                            const foodPheromone = pheromoneGrid[i][j].food;
+                            const nestPheromone = pheromoneGrid[i][j].nest;
+
+                            if (foodPheromone > 0 || nestPheromone > 0) {
+                                const opacity = Math.min(1, Math.max(foodPheromone, nestPheromone) * 0.1);
+                                
+                                if (foodPheromone > nestPheromone) {
+                                    ctx.fillStyle = `rgba(0, 0, 255, ${opacity})`;
+                                } else {
+                                    ctx.fillStyle = `rgba(255, 0, 0, ${opacity})`;
+                                }
+                                ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
+                            }
+                        }
+                    }
+                }
+                
+                // Food sources are now blue
+                ctx.fillStyle = 'blue';
+                for (const food of foodSources) {
+                    ctx.fillRect(food.x, food.y, food.width, food.height);
+                }
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(NEST_LOCATION.x, NEST_LOCATION.y, NEST_LOCATION.width, NEST_LOCATION.height);
+
+                ants.forEach(ant => ant.draw());
+            }
+
+            createAnts(numAntsSlider.value);
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
